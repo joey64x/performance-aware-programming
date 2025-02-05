@@ -6,7 +6,7 @@ class PerformanceAwareProgramming
     private static readonly Dictionary<string, (string Description, Action<string[]> Run)> Homework = new()
     {
         ["01"] = ("Single Instruction Decode", SingleInstructionDecode.Run),
-        //["02"] = ("Multi Instruction Decode", MultiInstructionDecode.Run)
+        ["02"] = ("Multi MOV Decode", MultiMoveDecode.Run)
     };
 
     static void Main(string[] args)
