@@ -1,2 +1,28 @@
 .DS_Store
 **/.idea/
+
+# Build results
+**/[Bb]in/
+**/[Oo]bj/
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Rider files
+.idea/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Visual Studio Code files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
