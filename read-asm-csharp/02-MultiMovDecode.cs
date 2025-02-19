@@ -93,6 +93,18 @@ static class MultiMoveDecode
             {
                 bytesUsed += ImmediateToRegisterMove(instructionBytes);
             }
+            else if (firstByte >> 1 == 0b1100011) // Immediate to memory mov
+            {
+                bytesUsed += ImmediateToMemoryMove(instructionBytes);
+            }
+            else if (firstByte == 0b10100010 || firstByte == 0b10100011) // mov accumulator to memory
+            {
+                bytesUsed += AccumulatorToMemoryMove(instructionBytes);
+            }
+            else if (firstByte == 0b10100000 || firstByte == 0b10100001) // mov memory to accumulator
+            {
+                bytesUsed += MemoryToAccumulatorMove(instructionBytes);
+            }
             else
             {
                 Console.WriteLine($"Could not identify OpCode in byte {firstByte:B8}");
@@ -162,22 +174,23 @@ static class MultiMoveDecode
             // memory mode - method handles displacement
 
             // check for special case first:
-            if (rm == 0b110) // special case for for when R/M = b110
+            if (mod == 0b00 && rm == 0b110) // Direct addressing
             {
-                var rmValue = $"[{EffectiveAddresses[rm]}]";
+                var addr = Get16BitValue(bytes[2], bytes[3]);
+                var rmValue = $"[{addr}]";
                 var regValue = (wBit == 1) ? Registers16[reg] : Registers8[reg];
 
-                if (dBit == 1) // REG field holds the destination
+                if (dBit == 1)
                 {
                     Console.WriteLine($"mov {regValue}, {rmValue}");
                 }
-                else // REG field holds the source
+                else
                 {
                     Console.WriteLine($"mov {rmValue}, {regValue}");
                 }
                 
-                return 3;
-            }
+                return 4;  // opcode + modrm + addr_lo + addr_hi
+            }   
 
             return MemoryInstructionMove(mod, dBit, wBit, reg, rm, bytes[2], bytes[3]);
         }
@@ -208,11 +221,19 @@ static class MultiMoveDecode
                 rmValue = $"[{EffectiveAddresses[rm]}]";
                 break;
             case 0b01: // 8-bit displacement
-                rmValue = $"[{EffectiveAddresses[rm]} + {(sbyte)dispLo}]";
+                var disp8 = (sbyte)dispLo;
+                // decide what sign to show and space it properly
+                var sign8 = disp8 < 0 ? "- " : "+ ";
+                var value8 = Math.Abs((int)disp8);    // Use absolute value for display for formatting purposes
+                rmValue = $"[{EffectiveAddresses[rm]} {sign8}{value8}]";
                 bytesUsed += 1; // extra byte for DISP-LO
                 break;
             case 0b10: // 16-bit displacement
-                rmValue = $"[{EffectiveAddresses[rm]} + {Get16BitValue(dispLo, dispHi)}]";
+                var disp16 = Get16BitValue(dispLo, dispHi);
+                // decide what sign to show and space it properly
+                var sign16 = disp16 < 0 ? "- " : "+ ";
+                var value16 = Math.Abs((int)disp16);   // Use absolute value for display for formatting purposes
+                rmValue = $"[{EffectiveAddresses[rm]} {sign16}{value16}]";
                 bytesUsed += 2; // extra two bytes for DISP-LO and DISP-HI
                 break;
         }
@@ -227,5 +248,72 @@ static class MultiMoveDecode
         }
 
         return bytesUsed;
+    }
+
+    private static int ImmediateToMemoryMove(ReadOnlySpan<byte> bytes)
+    {
+        var wBit = bytes[0] & 0b00000001;
+        var mod = bytes[1] >> 6;
+        var rm = bytes[1] & 0b00000111;
+        
+        int bytesUsed = 2;  // First two bytes
+        string rmValue = "";
+        
+        if (mod == 0b00 && rm == 0b110) // Direct address
+        {
+            var addr = Get16BitValue(bytes[2], bytes[3]);
+            rmValue = $"[{addr}]";
+            bytesUsed += 2;
+        }
+        else
+        {
+            // Handle displacement similar to your existing code
+            switch (mod)
+            {
+                case 0b00:
+                    rmValue = $"[{EffectiveAddresses[rm]}]";
+                    break;
+                case 0b01:
+                    rmValue = $"[{EffectiveAddresses[rm]} + {(sbyte)bytes[2]}]";
+                    bytesUsed += 1;
+                    break;
+                case 0b10:
+                    rmValue = $"[{EffectiveAddresses[rm]} + {Get16BitValue(bytes[2], bytes[3])}]";
+                    bytesUsed += 2;
+                    break;
+            }
+        }
+        
+        // Get the immediate value after the addressing bytes
+        var immediate = wBit == 1 ? 
+            Get16BitValue(bytes[bytesUsed], bytes[bytesUsed + 1]) :
+            (sbyte)bytes[bytesUsed];
+        
+        bytesUsed += wBit == 1 ? 2 : 1;
+        
+        var sizeSpec = wBit == 1 ? "word" : "byte";
+        Console.WriteLine($"mov {rmValue}, {sizeSpec} {immediate}");
+        
+        return bytesUsed;
+    }
+
+    private static int AccumulatorToMemoryMove(ReadOnlySpan<byte> bytes)
+    {
+        var wBit = bytes[0] & 0b00000001;
+        var addr = Get16BitValue(bytes[1], bytes[2]);
+        var reg = wBit == 1 ? "ax" : "al";
+        
+        Console.WriteLine($"mov [{addr}], {reg}");
+        return 3;
+    }
+
+    private static int MemoryToAccumulatorMove(ReadOnlySpan<byte> bytes)
+    {
+        var wBit = bytes[0] & 0b00000001;
+        var addr = Get16BitValue(bytes[1], bytes[2]);
+        var reg = wBit == 1 ? "ax" : "al";
+        
+        Console.WriteLine($"mov {reg}, [{addr}]");
+        return 3;
     }
 }
